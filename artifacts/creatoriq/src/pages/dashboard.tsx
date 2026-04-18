@@ -3,7 +3,7 @@ import { useGetCreatorDashboard, getGetCreatorDashboardQueryKey, useListCreatorM
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, AlertCircle, TrendingUp, CheckCircle2, XCircle, Users, Activity } from "lucide-react";
+import { ArrowRight, AlertCircle, TrendingUp, CheckCircle2, XCircle, Users, Activity, LineChart } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";

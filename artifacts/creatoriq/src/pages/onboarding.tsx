@@ -19,21 +19,28 @@ import { Progress } from "@/components/ui/progress";
 const profileSchema = z.object({
   displayName: z.string().min(2, "Name is required"),
   age: z.coerce.number().min(13, "Must be at least 13"),
-  primaryCategory: z.string().min(2, "Category is required"),
-  accountType: z.string().min(2, "Account type is required"),
+  primaryCategory: z.string().min(1, "Category is required"),
+  accountType: z.string().min(1, "Account type is required"),
   followerCount: z.coerce.number().min(0),
   postFrequencyPerWeek: z.coerce.number().min(0),
-  targetAudience: z.string().min(2),
-  aspiration: z.string().min(2),
-  biggestChallenge: z.string().min(2),
+  targetAudience: z.string().min(2, "Target audience is required"),
+  aspiration: z.string().min(2, "Goal is required"),
+  biggestChallenge: z.string().min(2, "Challenge is required"),
   baselineEngagementRate: z.coerce.number().min(0),
   baselineReach: z.coerce.number().min(0),
-  contentTone: z.string().min(2),
-  postingTimeHabit: z.string().min(2),
-  creatingSince: z.string().min(2),
+  contentTone: z.string().min(2, "Tone is required"),
+  postingTimeHabit: z.string().min(2, "Posting habit is required"),
+  creatingSince: z.string().min(1, "Required"),
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
+
+const stepFields: Record<number, Array<keyof ProfileFormValues>> = {
+  1: ["displayName", "primaryCategory", "age", "creatingSince"],
+  2: ["followerCount", "baselineEngagementRate", "baselineReach", "postFrequencyPerWeek"],
+  3: ["targetAudience", "contentTone", "postingTimeHabit"],
+  4: ["aspiration", "biggestChallenge", "accountType"],
+};
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
@@ -84,12 +91,13 @@ export default function Onboarding() {
     }
   }, [profileResponse, form]);
 
-  const onSubmit = (data: ProfileFormValues) => {
-    if (step < totalSteps) {
-      setStep(step + 1);
-      return;
-    }
+  const handleNext = async () => {
+    const fields = stepFields[step];
+    const valid = await form.trigger(fields);
+    if (valid) setStep(step + 1);
+  };
 
+  const onSubmit = (data: ProfileFormValues) => {
     upsertProfile.mutate({
       data: {
         ...data,
@@ -150,7 +158,7 @@ export default function Onboarding() {
           <CardContent className="pt-6">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                
+
                 {step === 1 && (
                   <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
                     <FormField
@@ -172,7 +180,7 @@ export default function Onboarding() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-base font-semibold">What's your primary niche?</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger className="h-12 text-lg">
                                 <SelectValue placeholder="Select a niche" />
@@ -365,7 +373,7 @@ export default function Onboarding() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-base font-semibold">Account Type</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger className="h-12">
                                 <SelectValue placeholder="Select account type" />
@@ -385,28 +393,37 @@ export default function Onboarding() {
                 )}
 
                 <div className="flex items-center justify-between pt-6 border-t border-border mt-8">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => setStep(step - 1)}
                     disabled={step === 1 || upsertProfile.isPending}
                     className="font-semibold"
                   >
                     Back
                   </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={upsertProfile.isPending}
-                    className="font-semibold min-w-32"
-                  >
-                    {upsertProfile.isPending ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : step === totalSteps ? (
-                      <><Save className="w-4 h-4 mr-2" /> Save Profile</>
-                    ) : (
-                      <>Continue <ArrowRight className="w-4 h-4 ml-2" /></>
-                    )}
-                  </Button>
+
+                  {step < totalSteps ? (
+                    <Button
+                      type="button"
+                      onClick={handleNext}
+                      className="font-semibold min-w-32"
+                    >
+                      Continue <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      disabled={upsertProfile.isPending}
+                      className="font-semibold min-w-32"
+                    >
+                      {upsertProfile.isPending ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <><Save className="w-4 h-4 mr-2" /> Save Profile</>
+                      )}
+                    </Button>
+                  )}
                 </div>
               </form>
             </Form>
