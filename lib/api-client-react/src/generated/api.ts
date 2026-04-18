@@ -19,12 +19,14 @@ import type {
 import type {
   Analysis,
   CreateAnalysisRequest,
-  CreateScreenshotInsightsRequest,
   CreatorMatch,
   CreatorProfile,
   CreatorProfileResponse,
   DashboardResponse,
+  ExtractScreenshotMetricsRequest,
   HealthStatus,
+  MetricReviewResponse,
+  PipelineGateResponse,
   SubmitFeedbackRequest,
   Suggestion,
   UpsertCreatorProfileRequest,
@@ -428,7 +430,7 @@ export function useListAnalyses<
 }
 
 /**
- * @summary Create an analytics insight translation
+ * @summary Create a confirmed analytics insight translation
  */
 export const getCreateAnalysisUrl = () => {
   return `/api/creatoriq/analyses`;
@@ -447,7 +449,7 @@ export const createAnalysis = async (
 };
 
 export const getCreateAnalysisMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<PipelineGateResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -488,13 +490,13 @@ export type CreateAnalysisMutationResult = NonNullable<
   Awaited<ReturnType<typeof createAnalysis>>
 >;
 export type CreateAnalysisMutationBody = BodyType<CreateAnalysisRequest>;
-export type CreateAnalysisMutationError = ErrorType<unknown>;
+export type CreateAnalysisMutationError = ErrorType<PipelineGateResponse>;
 
 /**
- * @summary Create an analytics insight translation
+ * @summary Create a confirmed analytics insight translation
  */
 export const useCreateAnalysis = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<PipelineGateResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -764,42 +766,42 @@ export function useListCreatorMatches<
 }
 
 /**
- * @summary Extract insight from an Instagram analytics screenshot
+ * @summary Extract metrics from an Instagram analytics screenshot for user review
  */
-export const getCreateScreenshotInsightsUrl = () => {
-  return `/api/creatoriq/screenshot-insights`;
+export const getExtractScreenshotMetricsUrl = () => {
+  return `/api/creatoriq/screenshot-metrics`;
 };
 
-export const createScreenshotInsights = async (
-  createScreenshotInsightsRequest: CreateScreenshotInsightsRequest,
+export const extractScreenshotMetrics = async (
+  extractScreenshotMetricsRequest: ExtractScreenshotMetricsRequest,
   options?: RequestInit,
-): Promise<Analysis> => {
-  return customFetch<Analysis>(getCreateScreenshotInsightsUrl(), {
+): Promise<MetricReviewResponse> => {
+  return customFetch<MetricReviewResponse>(getExtractScreenshotMetricsUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createScreenshotInsightsRequest),
+    body: JSON.stringify(extractScreenshotMetricsRequest),
   });
 };
 
-export const getCreateScreenshotInsightsMutationOptions = <
+export const getExtractScreenshotMetricsMutationOptions = <
   TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createScreenshotInsights>>,
+    Awaited<ReturnType<typeof extractScreenshotMetrics>>,
     TError,
-    { data: BodyType<CreateScreenshotInsightsRequest> },
+    { data: BodyType<ExtractScreenshotMetricsRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof createScreenshotInsights>>,
+  Awaited<ReturnType<typeof extractScreenshotMetrics>>,
   TError,
-  { data: BodyType<CreateScreenshotInsightsRequest> },
+  { data: BodyType<ExtractScreenshotMetricsRequest> },
   TContext
 > => {
-  const mutationKey = ["createScreenshotInsights"];
+  const mutationKey = ["extractScreenshotMetrics"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -809,43 +811,43 @@ export const getCreateScreenshotInsightsMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createScreenshotInsights>>,
-    { data: BodyType<CreateScreenshotInsightsRequest> }
+    Awaited<ReturnType<typeof extractScreenshotMetrics>>,
+    { data: BodyType<ExtractScreenshotMetricsRequest> }
   > = (props) => {
     const { data } = props ?? {};
 
-    return createScreenshotInsights(data, requestOptions);
+    return extractScreenshotMetrics(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type CreateScreenshotInsightsMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createScreenshotInsights>>
+export type ExtractScreenshotMetricsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof extractScreenshotMetrics>>
 >;
-export type CreateScreenshotInsightsMutationBody =
-  BodyType<CreateScreenshotInsightsRequest>;
-export type CreateScreenshotInsightsMutationError = ErrorType<unknown>;
+export type ExtractScreenshotMetricsMutationBody =
+  BodyType<ExtractScreenshotMetricsRequest>;
+export type ExtractScreenshotMetricsMutationError = ErrorType<unknown>;
 
 /**
- * @summary Extract insight from an Instagram analytics screenshot
+ * @summary Extract metrics from an Instagram analytics screenshot for user review
  */
-export const useCreateScreenshotInsights = <
+export const useExtractScreenshotMetrics = <
   TError = ErrorType<unknown>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createScreenshotInsights>>,
+    Awaited<ReturnType<typeof extractScreenshotMetrics>>,
     TError,
-    { data: BodyType<CreateScreenshotInsightsRequest> },
+    { data: BodyType<ExtractScreenshotMetricsRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof createScreenshotInsights>>,
+  Awaited<ReturnType<typeof extractScreenshotMetrics>>,
   TError,
-  { data: BodyType<CreateScreenshotInsightsRequest> },
+  { data: BodyType<ExtractScreenshotMetricsRequest> },
   TContext
 > => {
-  return useMutation(getCreateScreenshotInsightsMutationOptions(options));
+  return useMutation(getExtractScreenshotMetricsMutationOptions(options));
 };

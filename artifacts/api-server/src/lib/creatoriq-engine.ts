@@ -34,18 +34,38 @@ export type CreatorProfileInput = {
   creatingSince: string;
 };
 
-export type InsightDraft = {
-  summary: string;
-  brutallyHonestTake: string;
-  whyItHappened: string[];
-  clarifyingQuestions: string[];
-  nextContentPlan: string[];
-  suggestions: Array<{
-    title: string;
-    rationale: string;
-    action: string;
-  }>;
+export type ActionItemDraft = {
+  what: string;
+  why: string;
+  how: string;
+  when: string;
 };
+
+export type InsightDraft = {
+  insight: string;
+  benchmarkComparison: string;
+  actionItems: ActionItemDraft[];
+};
+
+export type ExtractionReview = {
+  status: "ready_for_review" | "clarification_required";
+  metrics: Partial<MetricsInput>;
+  missingFields: string[];
+  questions: string[];
+};
+
+const metricFields = [
+  "reach",
+  "impressions",
+  "engagementRate",
+  "followerChange",
+  "saves",
+  "shares",
+  "profileVisits",
+  "linkClicks",
+  "contentFormat",
+  "postTopic",
+] as const;
 
 export function inferFollowerTier(followerCount: number) {
   if (followerCount < 10_000) return "nano";
@@ -91,77 +111,117 @@ function extractJson(text: string) {
   }
 }
 
-function normalizeDraft(input: Partial<InsightDraft> | null, profile: CreatorProfileInput, metrics: MetricsInput): InsightDraft {
+function benchmarkText(profile: CreatorProfileInput, metrics: MetricsInput) {
   const reachDelta = metrics.reach - profile.baselineReach;
-  const erDelta = metrics.engagementRate - profile.baselineEngagementRate;
-  const reachDirection = reachDelta >= 0 ? "above" : "below";
-  const erDirection = erDelta >= 0 ? "stronger" : "weaker";
-  const saveShareSignal = metrics.saves + metrics.shares;
-  const fallback: InsightDraft = {
-    summary: `${profile.displayName}, this ${metrics.contentFormat.toLowerCase()} reached ${metrics.reach.toLocaleString()} people, which is ${Math.abs(Math.round((reachDelta / Math.max(profile.baselineReach, 1)) * 100))}% ${reachDirection} your usual baseline. Engagement is ${erDirection} than your norm, so the real story is not just reach; it is whether the post gave people a reason to save, share, or visit your profile.`,
-    brutallyHonestTake: saveShareSignal > metrics.reach * 0.04
-      ? "This has proof of value. The idea is worth repeating, but make the hook sharper so more people understand the payoff in the first second."
-      : "The post got seen, but it did not create enough intent. Right now it is behaving more like scroll-by content than follow-worthy content.",
-    whyItHappened: [
-      `Your ${profile.primaryCategory.toLowerCase()} audience likely responded to the topic, but the ${metrics.contentFormat.toLowerCase()} packaging controlled how far it travelled.`,
-      metrics.shares > metrics.saves ? "Shares are doing more work than saves, which means the idea may be socially relatable but not yet useful enough to bookmark." : "Saves are stronger than shares, which means the content has utility but needs a more shareable angle.",
-      `Your posting rhythm of ${profile.postFrequencyPerWeek} posts per week gives enough signal to test one change next week without confusing the data.`,
-    ],
-    clarifyingQuestions: [
-      "Was this post built around a trend, a personal story, or a tutorial format?",
-      "Did the first line or first frame clearly tell viewers what they would get?",
-      "Was the call-to-action asking for a comment, save, share, profile visit, or follow?",
-    ],
-    nextContentPlan: [
-      `Make one follow-up on the same topic in ${profile.contentTone} tone, but open with the strongest audience pain point instead of context.`,
-      `Turn the post into a ${profile.contentFormats[0] ?? metrics.contentFormat} with a clearer promise: what changes for the viewer after watching?`,
-      "Track saves, shares, and profile visits separately for the next post so IQ can tell whether the issue is value, relatability, or conversion.",
-    ],
-    suggestions: [
-      {
-        title: "Rewrite the hook around the viewer's problem",
-        rationale: "Reach without action usually means people understood the topic but not the personal payoff.",
-        action: `Create a new opening line for ${metrics.postTopic} that starts with the audience problem, then reveals the outcome in under 8 words.`,
-      },
-      {
-        title: "Double down on the strongest save/share signal",
-        rationale: "Saves and shares tell you what people found useful enough to keep or send. That is more actionable than raw impressions.",
-        action: metrics.saves >= metrics.shares ? "Build a carousel checklist from the same idea and explicitly ask viewers to save it." : "Make a Reel version that leans into the relatable moment and asks viewers who needs to hear it.",
-      },
-      {
-        title: "Run one controlled timing test",
-        rationale: `Your current habit is ${profile.postingTimeHabit}. Timing should be tested one variable at a time, not guessed from vibes.`,
-        action: "Post the next comparable piece 90 minutes earlier or later, then compare reach in the first 2 hours only.",
-      },
-    ],
-  };
+  const reachPct = Math.round((reachDelta / Math.max(profile.baselineReach, 1)) * 100);
+  const erDelta = Number((metrics.engagementRate - profile.baselineEngagementRate).toFixed(1));
+  const reachDirection = reachPct >= 0 ? "above" : "below";
+  const erDirection = erDelta >= 0 ? "above" : "below";
+  return `Reach is ${Math.abs(reachPct)}% ${reachDirection} your ${profile.baselineReach.toLocaleString()} baseline, and engagement is ${Math.abs(erDelta)} points ${erDirection} your ${profile.baselineEngagementRate}% baseline.`;
+}
+
+function fallbackDraft(profile: CreatorProfileInput, metrics: MetricsInput): InsightDraft {
+  const saveRate = metrics.reach > 0 ? metrics.saves / metrics.reach : 0;
+  const shareRate = metrics.reach > 0 ? metrics.shares / metrics.reach : 0;
+  const profileVisitRate = metrics.reach > 0 ? metrics.profileVisits / metrics.reach : 0;
+  const strongestSignal = saveRate >= shareRate && saveRate >= profileVisitRate ? "saves" : shareRate >= profileVisitRate ? "shares" : "profile visits";
 
   return {
-    summary: input?.summary || fallback.summary,
-    brutallyHonestTake: input?.brutallyHonestTake || fallback.brutallyHonestTake,
-    whyItHappened: Array.isArray(input?.whyItHappened) && input.whyItHappened.length ? input.whyItHappened.slice(0, 4) : fallback.whyItHappened,
-    clarifyingQuestions: Array.isArray(input?.clarifyingQuestions) && input.clarifyingQuestions.length ? input.clarifyingQuestions.slice(0, 4) : fallback.clarifyingQuestions,
-    nextContentPlan: Array.isArray(input?.nextContentPlan) && input.nextContentPlan.length ? input.nextContentPlan.slice(0, 5) : fallback.nextContentPlan,
-    suggestions: Array.isArray(input?.suggestions) && input.suggestions.length ? input.suggestions.slice(0, 4).map((suggestion) => ({
-      title: suggestion.title || "Test a sharper content angle",
-      rationale: suggestion.rationale || "The data points to a specific change worth testing next.",
-      action: suggestion.action || "Make one focused version of the idea and compare it against this post.",
-    })) : fallback.suggestions,
+    insight: `${profile.displayName}, this ${metrics.contentFormat.toLowerCase()} is showing its clearest signal in ${strongestSignal}. The post topic was ${metrics.postTopic}, and the data says the next move should be a controlled follow-up, not a vague content reset.`,
+    benchmarkComparison: benchmarkText(profile, metrics),
+    actionItems: [
+      {
+        what: `Make one follow-up post about ${metrics.postTopic}`,
+        why: `Repeating the topic isolates whether the audience cares about the idea itself instead of changing too many variables at once.`,
+        how: `Keep the same topic, change only the hook, and lead with the viewer payoff in the first line or first frame.`,
+        when: "Publish it as your next comparable post within 72 hours.",
+      },
+      {
+        what: "Add one explicit save or share prompt",
+        why: `${metrics.saves.toLocaleString()} saves and ${metrics.shares.toLocaleString()} shares are the clearest intent metrics behind this result.`,
+        how: metrics.saves >= metrics.shares ? "End with: 'Save this for the next time you need it.'" : "End with: 'Send this to someone who needs the reminder.'",
+        when: "Use it in the caption and final frame of the follow-up post.",
+      },
+      {
+        what: "Compare profile conversion after the follow-up",
+        why: `${metrics.profileVisits.toLocaleString()} profile visits only matter if they turn into followers, so the next check must connect content performance to account growth.`,
+        how: "Record reach, profile visits, and follower change for the follow-up, then compare profile visits per 1,000 reach against this post.",
+        when: "Review the numbers 24 hours after posting.",
+      },
+    ],
   };
+}
+
+function normalizeActionItem(item: Partial<ActionItemDraft> | undefined, fallback: ActionItemDraft): ActionItemDraft {
+  return {
+    what: typeof item?.what === "string" && item.what.trim() ? item.what : fallback.what,
+    why: typeof item?.why === "string" && item.why.trim() ? item.why : fallback.why,
+    how: typeof item?.how === "string" && item.how.trim() ? item.how : fallback.how,
+    when: typeof item?.when === "string" && item.when.trim() ? item.when : fallback.when,
+  };
+}
+
+function normalizeDraft(input: Partial<InsightDraft> | null, profile: CreatorProfileInput, metrics: MetricsInput): InsightDraft {
+  const fallback = fallbackDraft(profile, metrics);
+  const actionItems = Array.isArray(input?.actionItems) ? input.actionItems : [];
+  return {
+    insight: typeof input?.insight === "string" && input.insight.trim() ? input.insight : fallback.insight,
+    benchmarkComparison: typeof input?.benchmarkComparison === "string" && input.benchmarkComparison.trim() ? input.benchmarkComparison : fallback.benchmarkComparison,
+    actionItems: [0, 1, 2].map((index) => normalizeActionItem(actionItems[index], fallback.actionItems[index])),
+  };
+}
+
+export function validateMetrics(metrics: Partial<MetricsInput>) {
+  const missingFields = metricFields.filter((field) => {
+    const value = metrics[field];
+    if (typeof value === "string") return !value.trim();
+    return value === undefined || value === null || Number.isNaN(Number(value));
+  });
+
+  return {
+    isComplete: missingFields.length === 0,
+    missingFields: [...missingFields],
+    questions: buildMetricQuestions([...missingFields]),
+  };
+}
+
+export function buildMetricQuestions(fields: string[]) {
+  const labels: Record<string, string> = {
+    reach: "What was the post reach?",
+    impressions: "How many impressions did the post get?",
+    engagementRate: "What was the engagement rate percentage?",
+    followerChange: "How many followers were gained or lost from this post?",
+    saves: "How many saves did the post receive?",
+    shares: "How many shares did the post receive?",
+    profileVisits: "How many profile visits came from the post?",
+    linkClicks: "How many link clicks came from the post?",
+    contentFormat: "What format was the post: Reel, carousel, single image, or story?",
+    postTopic: "What was the post topic or hook?",
+  };
+
+  return fields.map((field) => labels[field] ?? `Please provide ${field}.`);
+}
+
+export function stableMetricsKey(source: "manual" | "screenshot", metrics: MetricsInput) {
+  return JSON.stringify({ source, metrics: metricFields.reduce<Record<string, unknown>>((acc, field) => {
+    acc[field] = metrics[field];
+    return acc;
+  }, {}) });
 }
 
 export async function generateInsightDraft(params: {
   profile: CreatorProfileInput;
   metrics: MetricsInput;
   calibrationNotes: string[];
+  pastAnalyses: Array<{ metrics: MetricsInput; insight: string; createdAt: string }>;
   source: "manual" | "screenshot";
 }) {
-  const prompt = `You are IQ, CreatorIQ's AI analytics translator for Instagram creators. Be conversational, Gen-Z friendly, honest, specific, and non-judgmental. Never invent causation. If the data is insufficient, ask clarifying questions instead of pretending certainty. Return only JSON with keys summary, brutallyHonestTake, whyItHappened, clarifyingQuestions, nextContentPlan, suggestions. Suggestions must have title, rationale, action.\n\nCreator profile:\n${JSON.stringify(params.profile)}\n\nCurrent metrics:\n${JSON.stringify(params.metrics)}\n\nAccepted/rejected calibration notes:\n${JSON.stringify(params.calibrationNotes)}\n\nSource: ${params.source}`;
+  const prompt = `You are IQ, CreatorIQ's deterministic Instagram analytics translator. Follow this forward-only pipeline: confirmed metrics -> insight diagnosis -> benchmark comparison -> exactly 3 action items -> terminal action plan. Do not ask questions. Do not re-open analysis. Do not return exploratory options. Return strict JSON only with keys insight, benchmarkComparison, actionItems. actionItems must contain exactly 3 objects, each with what, why, how, when.\n\nCreator profile:\n${JSON.stringify(params.profile)}\n\nConfirmed metrics:\n${JSON.stringify(params.metrics)}\n\nPast confirmed analyses for context:\n${JSON.stringify(params.pastAnalyses)}\n\nAccepted/rejected calibration memory:\n${JSON.stringify(params.calibrationNotes)}\n\nSource: ${params.source}`;
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 8192,
-      system: "You translate Instagram analytics into truthful, practical creator strategy. Return strict JSON only.",
+      max_tokens: 4096,
+      system: "You produce deterministic creator analytics. Return strict JSON only. Never ask follow-up questions. Always finish with exactly 3 action items.",
       messages: [{ role: "user", content: prompt }],
     });
     const text = message.content.map((block) => block.type === "text" ? block.text : "").join("\n");
@@ -171,70 +231,79 @@ export async function generateInsightDraft(params: {
   }
 }
 
-export async function extractMetricsFromScreenshot(imageDataUrl: string, notes: string | undefined, profile: CreatorProfileInput): Promise<MetricsInput> {
+export async function extractMetricsFromScreenshot(imageDataUrl: string, notes: string | undefined): Promise<ExtractionReview> {
   const match = imageDataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
-  if (match) {
-    try {
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 8192,
-        system: "Extract visible Instagram Insights metrics. Return strict JSON only with metrics key.",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: match[1],
-                  data: match[2],
-                },
-              },
-              {
-                type: "text",
-                text: `Extract reach, impressions, engagementRate, followerChange, saves, shares, profileVisits, linkClicks, contentFormat, postTopic from this screenshot. If a field is not visible, infer only from the creator's baseline and set a cautious value. Creator profile: ${JSON.stringify(profile)}. Notes: ${notes ?? "none"}`,
-              },
-            ],
-          },
-        ],
-      });
-      const text = message.content.map((block) => block.type === "text" ? block.text : "").join("\n");
-      const parsed = extractJson(text);
-      if (parsed?.metrics) {
-        return {
-          reach: Number(parsed.metrics.reach ?? profile.baselineReach),
-          impressions: Number(parsed.metrics.impressions ?? Math.round(profile.baselineReach * 1.35)),
-          engagementRate: Number(parsed.metrics.engagementRate ?? profile.baselineEngagementRate),
-          followerChange: Number(parsed.metrics.followerChange ?? 0),
-          saves: Number(parsed.metrics.saves ?? Math.round(profile.baselineReach * 0.015)),
-          shares: Number(parsed.metrics.shares ?? Math.round(profile.baselineReach * 0.01)),
-          profileVisits: Number(parsed.metrics.profileVisits ?? Math.round(profile.baselineReach * 0.025)),
-          linkClicks: Number(parsed.metrics.linkClicks ?? 0),
-          contentFormat: String(parsed.metrics.contentFormat ?? profile.contentFormats[0] ?? "Reel"),
-          postTopic: String(parsed.metrics.postTopic ?? notes ?? profile.primaryCategory),
-        };
-      }
-    } catch {
-      return screenshotFallback(notes, profile);
-    }
+  if (!match) {
+    return {
+      status: "clarification_required",
+      metrics: notes ? { postTopic: notes } : {},
+      missingFields: [...metricFields],
+      questions: buildMetricQuestions([...metricFields]),
+    };
   }
-  return screenshotFallback(notes, profile);
+
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4096,
+      system: "Extract only visible Instagram Insights metrics. Return strict JSON only with a metrics object. Do not infer missing numeric values.",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: match[1],
+                data: match[2],
+              },
+            },
+            {
+              type: "text",
+              text: `Extract these fields only when visible or explicitly provided in notes: reach, impressions, engagementRate, followerChange, saves, shares, profileVisits, linkClicks, contentFormat, postTopic. Notes: ${notes ?? "none"}`,
+            },
+          ],
+        },
+      ],
+    });
+    const text = message.content.map((block) => block.type === "text" ? block.text : "").join("\n");
+    const parsed = extractJson(text);
+    const metrics = coercePartialMetrics(parsed?.metrics ?? {});
+    if (notes && !metrics.postTopic) metrics.postTopic = notes;
+    const review = validateMetrics(metrics);
+
+    return {
+      status: review.isComplete ? "ready_for_review" : "clarification_required",
+      metrics,
+      missingFields: review.missingFields,
+      questions: review.questions,
+    };
+  } catch {
+    const metrics = notes ? { postTopic: notes } : {};
+    const review = validateMetrics(metrics);
+    return {
+      status: "clarification_required",
+      metrics,
+      missingFields: review.missingFields,
+      questions: review.questions,
+    };
+  }
 }
 
-function screenshotFallback(notes: string | undefined, profile: CreatorProfileInput): MetricsInput {
-  return {
-    reach: profile.baselineReach,
-    impressions: Math.round(profile.baselineReach * 1.35),
-    engagementRate: profile.baselineEngagementRate,
-    followerChange: 0,
-    saves: Math.round(profile.baselineReach * 0.015),
-    shares: Math.round(profile.baselineReach * 0.01),
-    profileVisits: Math.round(profile.baselineReach * 0.025),
-    linkClicks: 0,
-    contentFormat: profile.contentFormats[0] ?? "Reel",
-    postTopic: notes || `${profile.primaryCategory} post from screenshot`,
-  };
+function coercePartialMetrics(input: Partial<MetricsInput>): Partial<MetricsInput> {
+  const result: Partial<MetricsInput> = {};
+  for (const field of metricFields) {
+    const value = input[field];
+    if (value === undefined || value === null || value === "") continue;
+    if (field === "contentFormat" || field === "postTopic") {
+      result[field] = String(value);
+    } else {
+      const numeric = Number(value);
+      if (!Number.isNaN(numeric)) result[field] = numeric;
+    }
+  }
+  return result;
 }
 
 export function buildCreatorMatches(profile: CreatorProfileInput) {

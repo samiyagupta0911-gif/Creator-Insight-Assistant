@@ -6,19 +6,20 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { useCreateAnalysis, useCreateScreenshotInsights } from "@workspace/api-client-react";
+import { useCreateAnalysis, useExtractScreenshotMetrics } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { ArrowRight, ImageIcon, Loader2, PenLine, Upload } from "lucide-react";
+import { ArrowRight, CheckCircle2, ImageIcon, Loader2, PenLine, Upload } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useState, useRef } from "react";
 
 const manualSchema = z.object({
-  reach: z.coerce.number().min(0, "Must be >= 0"),
-  impressions: z.coerce.number().min(0, "Must be >= 0"),
-  engagementRate: z.coerce.number().min(0, "Must be >= 0"),
+  reach: z.coerce.number().min(1, "Reach is required"),
+  impressions: z.coerce.number().min(1, "Impressions are required"),
+  engagementRate: z.coerce.number().min(0.1, "Engagement rate is required"),
   followerChange: z.coerce.number(),
   saves: z.coerce.number().min(0, "Must be >= 0"),
   shares: z.coerce.number().min(0, "Must be >= 0"),
@@ -30,6 +31,60 @@ const manualSchema = z.object({
 });
 
 type ManualFormValues = z.infer<typeof manualSchema>;
+type Metrics = Omit<ManualFormValues, "context">;
+type ReviewState = {
+  source: "manual" | "screenshot";
+  metrics: Partial<Metrics>;
+  context?: string;
+  questions: string[];
+};
+
+const metricLabels: Record<keyof Metrics, string> = {
+  reach: "Reach",
+  impressions: "Impressions",
+  engagementRate: "Engagement Rate (%)",
+  followerChange: "Followers Gained/Lost",
+  saves: "Saves",
+  shares: "Shares",
+  profileVisits: "Profile Visits",
+  linkClicks: "Link Clicks",
+  contentFormat: "Content Format",
+  postTopic: "Post Topic / Hook",
+};
+
+const metricFields = Object.keys(metricLabels) as Array<keyof Metrics>;
+
+function buildMetricKey(source: "manual" | "screenshot", metrics: Metrics) {
+  return JSON.stringify({ source, metrics });
+}
+
+function reviewToCompleteMetrics(metrics: Partial<Metrics>) {
+  const normalized = {
+    reach: Number(metrics.reach),
+    impressions: Number(metrics.impressions),
+    engagementRate: Number(metrics.engagementRate),
+    followerChange: Number(metrics.followerChange ?? 0),
+    saves: Number(metrics.saves),
+    shares: Number(metrics.shares),
+    profileVisits: Number(metrics.profileVisits),
+    linkClicks: Number(metrics.linkClicks),
+    contentFormat: String(metrics.contentFormat ?? ""),
+    postTopic: String(metrics.postTopic ?? ""),
+  };
+
+  const missing = metricFields.filter((field) => {
+    const value = normalized[field];
+    if (typeof value === "string") return !value.trim();
+    if (field === "reach" || field === "impressions" || field === "engagementRate") return !Number.isFinite(value) || value <= 0;
+    return !Number.isFinite(value);
+  });
+
+  return { metrics: normalized, missing };
+}
+
+function questionsFor(fields: Array<keyof Metrics>) {
+  return fields.map((field) => `Please confirm ${metricLabels[field].toLowerCase()}.`);
+}
 
 export default function Analyze() {
   const [, setLocation] = useLocation();
@@ -37,9 +92,10 @@ export default function Analyze() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [screenshotNotes, setScreenshotNotes] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [review, setReview] = useState<ReviewState | null>(null);
 
   const createAnalysis = useCreateAnalysis();
-  const createScreenshotInsights = useCreateScreenshotInsights();
+  const extractScreenshotMetrics = useExtractScreenshotMetrics();
 
   const form = useForm<ManualFormValues>({
     resolver: zodResolver(manualSchema),
@@ -60,20 +116,8 @@ export default function Analyze() {
 
   const onManualSubmit = (data: ManualFormValues) => {
     const { context, ...metrics } = data;
-    createAnalysis.mutate({
-      data: {
-        metrics,
-        context
-      }
-    }, {
-      onSuccess: (analysis) => {
-        toast({ title: "Analysis complete", description: "Your insights are ready." });
-        setLocation(`/analysis/${analysis.id}`);
-      },
-      onError: () => {
-        toast({ title: "Error", description: "Failed to analyze post.", variant: "destructive" });
-      }
-    });
+    setReview({ source: "manual", metrics, context, questions: [] });
+    toast({ title: "Metric review required", description: "Confirm or edit the numbers before AI analysis runs." });
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,6 +127,7 @@ export default function Analyze() {
     const reader = new FileReader();
     reader.onloadend = () => {
       setSelectedImage(reader.result as string);
+      setReview(null);
     };
     reader.readAsDataURL(file);
   };
@@ -90,18 +135,70 @@ export default function Analyze() {
   const onScreenshotSubmit = () => {
     if (!selectedImage) return;
 
-    createScreenshotInsights.mutate({
+    extractScreenshotMetrics.mutate({
       data: {
         imageDataUrl: selectedImage,
         notes: screenshotNotes || undefined
       }
     }, {
+      onSuccess: (payload) => {
+        setReview({
+          source: "screenshot",
+          metrics: payload.metrics,
+          context: screenshotNotes,
+          questions: payload.questions,
+        });
+        toast({
+          title: payload.status === "ready_for_review" ? "Metrics extracted" : "More metric details needed",
+          description: "Review, edit, and confirm the metrics before analysis runs."
+        });
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Failed to extract screenshot metrics.", variant: "destructive" });
+      }
+    });
+  };
+
+  const updateReviewMetric = (field: keyof Metrics, value: string) => {
+    setReview((current) => {
+      if (!current) return current;
+      const nextValue = field === "contentFormat" || field === "postTopic" ? value : Number(value);
+      return { ...current, metrics: { ...current.metrics, [field]: nextValue } };
+    });
+  };
+
+  const confirmMetrics = () => {
+    if (!review) return;
+    const completed = reviewToCompleteMetrics(review.metrics);
+    if (completed.missing.length) {
+      setReview({ ...review, questions: questionsFor(completed.missing) });
+      toast({ title: "Metrics still missing", description: "Answer the targeted metric questions before analysis.", variant: "destructive" });
+      return;
+    }
+
+    const cacheKey = buildMetricKey(review.source, completed.metrics);
+    const cachedId = window.localStorage.getItem(`creatoriq:last-analysis:${cacheKey}`);
+    if (cachedId) {
+      toast({ title: "Cached analysis found", description: "Opening the existing action plan for these exact metrics." });
+      setLocation(`/analysis/${cachedId}`);
+      return;
+    }
+
+    createAnalysis.mutate({
+      data: {
+        metrics: completed.metrics,
+        context: review.context,
+        source: review.source,
+        confirmed: true,
+      }
+    }, {
       onSuccess: (analysis) => {
-        toast({ title: "Analysis complete", description: "Your insights are ready." });
+        window.localStorage.setItem(`creatoriq:last-analysis:${cacheKey}`, analysis.id);
+        toast({ title: "Action plan complete", description: "Your confirmed metrics were translated into a final plan." });
         setLocation(`/analysis/${analysis.id}`);
       },
       onError: () => {
-        toast({ title: "Error", description: "Failed to analyze screenshot.", variant: "destructive" });
+        toast({ title: "Error", description: "Failed to create action plan from confirmed metrics.", variant: "destructive" });
       }
     });
   };
@@ -111,8 +208,18 @@ export default function Analyze() {
       <div className="max-w-4xl mx-auto space-y-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Analyze Post</h1>
-          <p className="text-muted-foreground mt-2">Upload a screenshot of your insights or enter them manually.</p>
+          <p className="text-muted-foreground mt-2">Input → extraction if needed → metric review → confirmed data → AI insight → action plan.</p>
         </div>
+
+        {review && (
+          <MetricReviewCard
+            review={review}
+            onChange={updateReviewMetric}
+            onConfirm={confirmMetrics}
+            isPending={createAnalysis.isPending}
+            onCancel={() => setReview(null)}
+          />
+        )}
 
         <Tabs defaultValue="screenshot" className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2">
@@ -128,7 +235,7 @@ export default function Analyze() {
             <Card>
               <CardHeader>
                 <CardTitle>Screenshot Upload</CardTitle>
-                <CardDescription>Upload a screenshot of your Instagram post insights. We'll extract the numbers automatically.</CardDescription>
+                <CardDescription>Upload a screenshot first. CreatorIQ extracts visible numbers only, then you confirm them before analysis.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div 
@@ -148,7 +255,7 @@ export default function Analyze() {
                       <div className="relative max-h-[300px] overflow-hidden rounded-lg border border-border shadow-sm mx-auto max-w-[250px]">
                         <img src={selectedImage} alt="Uploaded screenshot" className="w-full h-auto object-contain" />
                       </div>
-                      <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedImage(null); }} className="mt-4">
+                      <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedImage(null); setReview(null); }} className="mt-4">
                         Choose different image
                       </Button>
                     </div>
@@ -159,7 +266,7 @@ export default function Analyze() {
                       </div>
                       <h3 className="text-lg font-semibold">Click to upload screenshot</h3>
                       <p className="text-muted-foreground mt-2 text-sm max-w-sm">
-                        Make sure the numbers for reach, engagement, saves, and shares are clearly visible.
+                        Make sure reach, impressions, engagement rate, saves, shares, profile visits, and follower change are visible.
                       </p>
                     </>
                   )}
@@ -168,9 +275,9 @@ export default function Analyze() {
                 {selectedImage && (
                   <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
                     <div className="space-y-2">
-                      <FormLabel>Additional Context (Optional)</FormLabel>
+                      <FormLabel>Screenshot Notes</FormLabel>
                       <Textarea 
-                        placeholder="What was this post about? Any specific goal?" 
+                        placeholder="Add only facts not visible in the image, like post topic or format." 
                         value={screenshotNotes}
                         onChange={(e) => setScreenshotNotes(e.target.value)}
                         className="resize-none h-24"
@@ -179,14 +286,14 @@ export default function Analyze() {
                     <Button 
                       className="w-full h-12 text-lg font-semibold" 
                       onClick={onScreenshotSubmit}
-                      disabled={createScreenshotInsights.isPending}
+                      disabled={extractScreenshotMetrics.isPending}
                     >
-                      {createScreenshotInsights.isPending ? (
+                      {extractScreenshotMetrics.isPending ? (
                         <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                       ) : (
                         <SparklesIcon className="w-5 h-5 mr-2" />
                       )}
-                      {createScreenshotInsights.isPending ? "Analyzing Data..." : "Extract & Analyze"}
+                      {extractScreenshotMetrics.isPending ? "Extracting Metrics..." : "Extract Metrics for Review"}
                     </Button>
                   </div>
                 )}
@@ -198,7 +305,7 @@ export default function Analyze() {
             <Card>
               <CardHeader>
                 <CardTitle>Manual Data Entry</CardTitle>
-                <CardDescription>Enter the numbers exactly as they appear in your Instagram insights.</CardDescription>
+                <CardDescription>Enter exact numbers first. AI analysis stays blocked until you confirm the metric review.</CardDescription>
               </CardHeader>
               <CardContent>
                 <Form {...form}>
@@ -206,117 +313,43 @@ export default function Analyze() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-4">
                         <h3 className="font-semibold text-lg border-b border-border pb-2">Core Metrics</h3>
-                        
-                        <FormField
-                          control={form.control}
-                          name="reach"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Reach</FormLabel>
-                              <FormControl>
-                                <Input type="number" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="impressions"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Impressions</FormLabel>
-                              <FormControl>
-                                <Input type="number" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="engagementRate"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Engagement Rate (%)</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.1" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="followerChange"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Followers (Gained/Lost)</FormLabel>
-                              <FormControl>
-                                <Input type="number" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        {(["reach", "impressions", "engagementRate", "followerChange"] as Array<keyof ManualFormValues>).map((name) => (
+                          <FormField
+                            key={name}
+                            control={form.control}
+                            name={name}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{metricLabels[name as keyof Metrics]}</FormLabel>
+                                <FormControl>
+                                  <Input type="number" step={name === "engagementRate" ? "0.1" : "1"} {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        ))}
                       </div>
 
                       <div className="space-y-4">
                         <h3 className="font-semibold text-lg border-b border-border pb-2">Interactions</h3>
-                        
                         <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="saves"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Saves</FormLabel>
-                                <FormControl>
-                                  <Input type="number" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="shares"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Shares</FormLabel>
-                                <FormControl>
-                                  <Input type="number" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="profileVisits"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Profile Visits</FormLabel>
-                                <FormControl>
-                                  <Input type="number" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="linkClicks"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Link Clicks</FormLabel>
-                                <FormControl>
-                                  <Input type="number" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                          {(["saves", "shares", "profileVisits", "linkClicks"] as Array<keyof ManualFormValues>).map((name) => (
+                            <FormField
+                              key={name}
+                              control={form.control}
+                              name={name}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{metricLabels[name as keyof Metrics]}</FormLabel>
+                                  <FormControl>
+                                    <Input type="number" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          ))}
                         </div>
 
                         <div className="pt-4 space-y-4">
@@ -366,8 +399,8 @@ export default function Analyze() {
                         name="context"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Additional Context (Optional)</FormLabel>
-                            <FormDescription>Any specific goals or context for this post?</FormDescription>
+                            <FormLabel>Additional Context</FormLabel>
+                            <FormDescription>Only add factual context. The system will not assume missing metrics from this field.</FormDescription>
                             <FormControl>
                               <Textarea className="resize-none" {...field} />
                             </FormControl>
@@ -380,14 +413,9 @@ export default function Analyze() {
                     <Button 
                       type="submit" 
                       className="w-full h-12 text-lg font-semibold" 
-                      disabled={createAnalysis.isPending}
                     >
-                      {createAnalysis.isPending ? (
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      ) : (
-                        <SparklesIcon className="w-5 h-5 mr-2" />
-                      )}
-                      {createAnalysis.isPending ? "Analyzing..." : "Analyze Post"}
+                      <CheckCircle2 className="w-5 h-5 mr-2" />
+                      Review Metrics
                     </Button>
                   </form>
                 </Form>
@@ -397,6 +425,69 @@ export default function Analyze() {
         </Tabs>
       </div>
     </AppLayout>
+  );
+}
+
+function MetricReviewCard({ review, onChange, onConfirm, isPending, onCancel }: {
+  review: ReviewState;
+  onChange: (field: keyof Metrics, value: string) => void;
+  onConfirm: () => void;
+  isPending: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardHeader>
+        <CardTitle>Metric Review Required</CardTitle>
+        <CardDescription>AI analysis is blocked until you confirm or edit every required metric below.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {review.questions.length > 0 && (
+          <Alert>
+            <AlertTitle>Clarification needed before analysis</AlertTitle>
+            <AlertDescription>
+              <ul className="mt-2 list-disc pl-5 space-y-1">
+                {review.questions.map((question) => <li key={question}>{question}</li>)}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {metricFields.map((field) => (
+            <div key={field} className="space-y-2">
+              <FormLabel>{metricLabels[field]}</FormLabel>
+              {field === "contentFormat" ? (
+                <Select value={String(review.metrics[field] ?? "")} onValueChange={(value) => onChange(field, value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="reel">Reel</SelectItem>
+                    <SelectItem value="carousel">Carousel</SelectItem>
+                    <SelectItem value="single_image">Single Image</SelectItem>
+                    <SelectItem value="story">Story</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  type={field === "postTopic" ? "text" : "number"}
+                  step={field === "engagementRate" ? "0.1" : "1"}
+                  value={review.metrics[field] ?? ""}
+                  onChange={(event) => onChange(field, event.target.value)}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button className="flex-1 h-11 font-semibold" onClick={onConfirm} disabled={isPending}>
+            {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ArrowRight className="w-4 h-4 mr-2" />}
+            {isPending ? "Creating Action Plan..." : "Confirm Metrics & Create Action Plan"}
+          </Button>
+          <Button variant="outline" className="sm:w-32" onClick={onCancel} disabled={isPending}>Edit Input</Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

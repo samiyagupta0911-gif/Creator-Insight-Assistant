@@ -12,8 +12,8 @@ import {
 import {
   CreateAnalysisBody,
   CreateAnalysisResponse,
-  CreateScreenshotInsightsBody,
-  CreateScreenshotInsightsResponse,
+  ExtractScreenshotMetricsBody,
+  ExtractScreenshotMetricsResponse,
   GetAnalysisParams,
   GetAnalysisResponse,
   GetCreatorDashboardResponse,
@@ -32,7 +32,10 @@ import {
   extractMetricsFromScreenshot,
   generateInsightDraft,
   inferFollowerTier,
+  stableMetricsKey,
+  validateMetrics,
   type CreatorProfileInput,
+  type MetricsInput,
 } from "../lib/creatoriq-engine";
 
 const router: IRouter = Router();
@@ -97,6 +100,7 @@ function suggestionToApi(suggestion: DbSuggestion) {
     title: suggestion.title,
     rationale: suggestion.rationale,
     action: suggestion.action,
+    actionWhen: suggestion.actionWhen ?? "Use this in the next scheduled post.",
     status: suggestion.status as "pending" | "accepted" | "rejected",
   };
 }
@@ -115,9 +119,9 @@ async function analysisToApi(analysis: DbAnalysis) {
     summary: analysis.summary,
     brutallyHonestTake: analysis.brutallyHonestTake,
     whyItHappened: analysis.whyItHappened,
-    clarifyingQuestions: analysis.clarifyingQuestions,
+    clarifyingQuestions: [],
     nextContentPlan: analysis.nextContentPlan,
-    suggestions: suggestions.map(suggestionToApi),
+    suggestions: suggestions.map(suggestionToApi).slice(0, 3),
     createdAt: analysis.createdAt.toISOString(),
   };
 }
@@ -155,10 +159,39 @@ async function getCalibrationNotes(profileId: string) {
     .map((row) => `${row.status}: ${row.title} — ${row.feedbackReason || row.action}`);
 }
 
-async function createAnalysisForProfile(profile: DbCreatorProfile, source: "manual" | "screenshot", metrics: DbAnalysis["metrics"]) {
+async function getPastAnalyses(profileId: string) {
+  const rows = await db
+    .select()
+    .from(analysesTable)
+    .where(eq(analysesTable.profileId, profileId))
+    .orderBy(desc(analysesTable.createdAt));
+
+  return rows.slice(0, 5).map((analysis) => ({
+    metrics: analysis.metrics,
+    insight: analysis.summary,
+    createdAt: analysis.createdAt.toISOString(),
+  }));
+}
+
+async function getCachedAnalysis(profileId: string, source: "manual" | "screenshot", metrics: MetricsInput) {
+  const key = stableMetricsKey(source, metrics);
+  const rows = await db
+    .select()
+    .from(analysesTable)
+    .where(eq(analysesTable.profileId, profileId))
+    .orderBy(desc(analysesTable.createdAt));
+
+  return rows.find((analysis) => stableMetricsKey(analysis.source as "manual" | "screenshot", analysis.metrics) === key) ?? null;
+}
+
+async function createAnalysisForProfile(profile: DbCreatorProfile, source: "manual" | "screenshot", metrics: MetricsInput) {
+  const cached = await getCachedAnalysis(profile.id, source, metrics);
+  if (cached) return analysisToApi(cached);
+
   const profileInput = profileToInput(profile);
   const calibrationNotes = await getCalibrationNotes(profile.id);
-  const draft = await generateInsightDraft({ profile: profileInput, metrics, calibrationNotes, source });
+  const pastAnalyses = await getPastAnalyses(profile.id);
+  const draft = await generateInsightDraft({ profile: profileInput, metrics, calibrationNotes, pastAnalyses, source });
 
   const [analysis] = await db
     .insert(analysesTable)
@@ -166,20 +199,21 @@ async function createAnalysisForProfile(profile: DbCreatorProfile, source: "manu
       profileId: profile.id,
       source,
       metrics,
-      summary: draft.summary,
-      brutallyHonestTake: draft.brutallyHonestTake,
-      whyItHappened: draft.whyItHappened,
-      clarifyingQuestions: draft.clarifyingQuestions,
-      nextContentPlan: draft.nextContentPlan,
+      summary: draft.insight,
+      brutallyHonestTake: draft.benchmarkComparison,
+      whyItHappened: [],
+      clarifyingQuestions: [],
+      nextContentPlan: draft.actionItems.map((item) => `${item.what} ${item.when}`),
     })
     .returning();
 
   await db.insert(suggestionsTable).values(
-    draft.suggestions.map((suggestion) => ({
+    draft.actionItems.map((item) => ({
       analysisId: analysis.id,
-      title: suggestion.title,
-      rationale: suggestion.rationale,
-      action: suggestion.action,
+      title: item.what,
+      rationale: item.why,
+      action: item.how,
+      actionWhen: item.when,
       status: "pending",
     })),
   );
@@ -280,8 +314,27 @@ router.post("/creatoriq/analyses", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!parsed.data.confirmed) {
+    res.status(409).json({
+      error: "Metric review confirmation is required before AI analysis.",
+      stage: "metric_review_required",
+    });
+    return;
+  }
+
+  const review = validateMetrics(parsed.data.metrics);
+  if (!review.isComplete) {
+    res.status(422).json({
+      error: "Required metrics are missing.",
+      stage: "clarification_required",
+      missingFields: review.missingFields,
+      questions: review.questions,
+    });
+    return;
+  }
+
   const profile = await getOrCreateProfile(getUserId(req));
-  const data = await createAnalysisForProfile(profile, "manual", parsed.data.metrics);
+  const data = await createAnalysisForProfile(profile, parsed.data.source ?? "manual", parsed.data.metrics);
   res.json(CreateAnalysisResponse.parse(data));
 });
 
@@ -344,18 +397,16 @@ router.get("/creatoriq/matches", async (req, res): Promise<void> => {
   res.json(ListCreatorMatchesResponse.parse(buildCreatorMatches(profileToInput(profile))));
 });
 
-router.post("/creatoriq/screenshot-insights", async (req, res): Promise<void> => {
-  const parsed = CreateScreenshotInsightsBody.safeParse(req.body);
+router.post("/creatoriq/screenshot-metrics", async (req, res): Promise<void> => {
+  const parsed = ExtractScreenshotMetricsBody.safeParse(req.body);
   if (!parsed.success) {
     req.log.warn({ errors: parsed.error.message }, "Invalid screenshot body");
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const profile = await getOrCreateProfile(getUserId(req));
-  const metrics = await extractMetricsFromScreenshot(parsed.data.imageDataUrl, parsed.data.notes, profileToInput(profile));
-  const data = await createAnalysisForProfile(profile, "screenshot", metrics);
-  res.json(CreateScreenshotInsightsResponse.parse(data));
+  const review = await extractMetricsFromScreenshot(parsed.data.imageDataUrl, parsed.data.notes);
+  res.json(ExtractScreenshotMetricsResponse.parse(review));
 });
 
 export default router;

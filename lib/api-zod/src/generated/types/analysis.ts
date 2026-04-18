@@ -18,6 +18,10 @@ export interface Analysis {
   whyItHappened: string[];
   clarifyingQuestions: string[];
   nextContentPlan: string[];
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
   suggestions: Suggestion[];
   createdAt: string;
 }

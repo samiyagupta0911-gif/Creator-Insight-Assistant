@@ -13,5 +13,6 @@ export interface Suggestion {
   title: string;
   rationale: string;
   action: string;
+  actionWhen: string;
   status: SuggestionStatus;
 }

@@ -107,6 +107,9 @@ export const UpsertCreatorProfileResponse = zod.object({
 /**
  * @summary Get dashboard summary
  */
+export const getCreatorDashboardResponseLatestAnalysisOneSuggestionsMin = 3;
+export const getCreatorDashboardResponseLatestAnalysisOneSuggestionsMax = 3;
+
 export const GetCreatorDashboardResponse = zod.object({
   profileComplete: zod.boolean(),
   analysesCount: zod.number(),
@@ -135,16 +138,20 @@ export const GetCreatorDashboardResponse = zod.object({
       whyItHappened: zod.array(zod.string()),
       clarifyingQuestions: zod.array(zod.string()),
       nextContentPlan: zod.array(zod.string()),
-      suggestions: zod.array(
-        zod.object({
-          id: zod.string(),
-          analysisId: zod.string(),
-          title: zod.string(),
-          rationale: zod.string(),
-          action: zod.string(),
-          status: zod.enum(["pending", "accepted", "rejected"]),
-        }),
-      ),
+      suggestions: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            analysisId: zod.string(),
+            title: zod.string(),
+            rationale: zod.string(),
+            action: zod.string(),
+            actionWhen: zod.string(),
+            status: zod.enum(["pending", "accepted", "rejected"]),
+          }),
+        )
+        .min(getCreatorDashboardResponseLatestAnalysisOneSuggestionsMin)
+        .max(getCreatorDashboardResponseLatestAnalysisOneSuggestionsMax),
       createdAt: zod.string(),
     }),
     zod.null(),
@@ -155,6 +162,9 @@ export const GetCreatorDashboardResponse = zod.object({
 /**
  * @summary List analytics analyses
  */
+export const listAnalysesResponseSuggestionsMin = 3;
+export const listAnalysesResponseSuggestionsMax = 3;
+
 export const ListAnalysesResponseItem = zod.object({
   id: zod.string(),
   profileId: zod.string(),
@@ -176,22 +186,26 @@ export const ListAnalysesResponseItem = zod.object({
   whyItHappened: zod.array(zod.string()),
   clarifyingQuestions: zod.array(zod.string()),
   nextContentPlan: zod.array(zod.string()),
-  suggestions: zod.array(
-    zod.object({
-      id: zod.string(),
-      analysisId: zod.string(),
-      title: zod.string(),
-      rationale: zod.string(),
-      action: zod.string(),
-      status: zod.enum(["pending", "accepted", "rejected"]),
-    }),
-  ),
+  suggestions: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        analysisId: zod.string(),
+        title: zod.string(),
+        rationale: zod.string(),
+        action: zod.string(),
+        actionWhen: zod.string(),
+        status: zod.enum(["pending", "accepted", "rejected"]),
+      }),
+    )
+    .min(listAnalysesResponseSuggestionsMin)
+    .max(listAnalysesResponseSuggestionsMax),
   createdAt: zod.string(),
 });
 export const ListAnalysesResponse = zod.array(ListAnalysesResponseItem);
 
 /**
- * @summary Create an analytics insight translation
+ * @summary Create a confirmed analytics insight translation
  */
 export const CreateAnalysisBody = zod.object({
   metrics: zod.object({
@@ -207,7 +221,12 @@ export const CreateAnalysisBody = zod.object({
     postTopic: zod.string(),
   }),
   context: zod.string().optional(),
+  source: zod.enum(["manual", "screenshot"]).optional(),
+  confirmed: zod.boolean().optional(),
 });
+
+export const createAnalysisResponseSuggestionsMin = 3;
+export const createAnalysisResponseSuggestionsMax = 3;
 
 export const CreateAnalysisResponse = zod.object({
   id: zod.string(),
@@ -230,16 +249,20 @@ export const CreateAnalysisResponse = zod.object({
   whyItHappened: zod.array(zod.string()),
   clarifyingQuestions: zod.array(zod.string()),
   nextContentPlan: zod.array(zod.string()),
-  suggestions: zod.array(
-    zod.object({
-      id: zod.string(),
-      analysisId: zod.string(),
-      title: zod.string(),
-      rationale: zod.string(),
-      action: zod.string(),
-      status: zod.enum(["pending", "accepted", "rejected"]),
-    }),
-  ),
+  suggestions: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        analysisId: zod.string(),
+        title: zod.string(),
+        rationale: zod.string(),
+        action: zod.string(),
+        actionWhen: zod.string(),
+        status: zod.enum(["pending", "accepted", "rejected"]),
+      }),
+    )
+    .min(createAnalysisResponseSuggestionsMin)
+    .max(createAnalysisResponseSuggestionsMax),
   createdAt: zod.string(),
 });
 
@@ -249,6 +272,9 @@ export const CreateAnalysisResponse = zod.object({
 export const GetAnalysisParams = zod.object({
   id: zod.coerce.string(),
 });
+
+export const getAnalysisResponseSuggestionsMin = 3;
+export const getAnalysisResponseSuggestionsMax = 3;
 
 export const GetAnalysisResponse = zod.object({
   id: zod.string(),
@@ -271,16 +297,20 @@ export const GetAnalysisResponse = zod.object({
   whyItHappened: zod.array(zod.string()),
   clarifyingQuestions: zod.array(zod.string()),
   nextContentPlan: zod.array(zod.string()),
-  suggestions: zod.array(
-    zod.object({
-      id: zod.string(),
-      analysisId: zod.string(),
-      title: zod.string(),
-      rationale: zod.string(),
-      action: zod.string(),
-      status: zod.enum(["pending", "accepted", "rejected"]),
-    }),
-  ),
+  suggestions: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        analysisId: zod.string(),
+        title: zod.string(),
+        rationale: zod.string(),
+        action: zod.string(),
+        actionWhen: zod.string(),
+        status: zod.enum(["pending", "accepted", "rejected"]),
+      }),
+    )
+    .min(getAnalysisResponseSuggestionsMin)
+    .max(getAnalysisResponseSuggestionsMax),
   createdAt: zod.string(),
 });
 
@@ -303,6 +333,7 @@ export const SubmitSuggestionFeedbackResponse = zod.object({
   title: zod.string(),
   rationale: zod.string(),
   action: zod.string(),
+  actionWhen: zod.string(),
   status: zod.enum(["pending", "accepted", "rejected"]),
 });
 
@@ -323,43 +354,27 @@ export const ListCreatorMatchesResponse = zod.array(
 );
 
 /**
- * @summary Extract insight from an Instagram analytics screenshot
+ * @summary Extract metrics from an Instagram analytics screenshot for user review
  */
-export const CreateScreenshotInsightsBody = zod.object({
+export const ExtractScreenshotMetricsBody = zod.object({
   imageDataUrl: zod.string(),
   notes: zod.string().optional(),
 });
 
-export const CreateScreenshotInsightsResponse = zod.object({
-  id: zod.string(),
-  profileId: zod.string(),
-  source: zod.string(),
+export const ExtractScreenshotMetricsResponse = zod.object({
+  status: zod.enum(["ready_for_review", "clarification_required"]),
   metrics: zod.object({
-    reach: zod.number(),
-    impressions: zod.number(),
-    engagementRate: zod.number(),
-    followerChange: zod.number(),
-    saves: zod.number(),
-    shares: zod.number(),
-    profileVisits: zod.number(),
-    linkClicks: zod.number(),
-    contentFormat: zod.string(),
-    postTopic: zod.string(),
+    reach: zod.number().optional(),
+    impressions: zod.number().optional(),
+    engagementRate: zod.number().optional(),
+    followerChange: zod.number().optional(),
+    saves: zod.number().optional(),
+    shares: zod.number().optional(),
+    profileVisits: zod.number().optional(),
+    linkClicks: zod.number().optional(),
+    contentFormat: zod.string().optional(),
+    postTopic: zod.string().optional(),
   }),
-  summary: zod.string(),
-  brutallyHonestTake: zod.string(),
-  whyItHappened: zod.array(zod.string()),
-  clarifyingQuestions: zod.array(zod.string()),
-  nextContentPlan: zod.array(zod.string()),
-  suggestions: zod.array(
-    zod.object({
-      id: zod.string(),
-      analysisId: zod.string(),
-      title: zod.string(),
-      rationale: zod.string(),
-      action: zod.string(),
-      status: zod.enum(["pending", "accepted", "rejected"]),
-    }),
-  ),
-  createdAt: zod.string(),
+  missingFields: zod.array(zod.string()),
+  questions: zod.array(zod.string()),
 });

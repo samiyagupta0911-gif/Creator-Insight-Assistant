@@ -66,6 +66,7 @@ export const suggestionsTable = pgTable("creator_suggestions", {
   title: text("title").notNull(),
   rationale: text("rationale").notNull(),
   action: text("action").notNull(),
+  actionWhen: text("action_when"),
   status: text("status").notNull().default("pending"),
   feedbackReason: text("feedback_reason"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

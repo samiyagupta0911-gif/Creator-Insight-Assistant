@@ -3,11 +3,12 @@ import { useGetAnalysis, getGetAnalysisQueryKey, useSubmitSuggestionFeedback } f
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
-import { ArrowLeft, Check, X, Loader2, Sparkles, TrendingUp, TrendingDown, Minus, Target, HelpCircle, MessageSquare } from "lucide-react";
+import { ArrowLeft, Check, X, Loader2, Sparkles, TrendingUp, TrendingDown, Target, Clock } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import type React from "react";
 
 export default function AnalysisDetail({ id }: { id: string }) {
   const [, setLocation] = useLocation();
@@ -28,20 +29,19 @@ export default function AnalysisDetail({ id }: { id: string }) {
       { id, data: { suggestionId, status } },
       {
         onSuccess: () => {
-          // Update cache locally instead of full invalidate to prevent jitter
           queryClient.setQueryData(getGetAnalysisQueryKey(id), (old: any) => {
             if (!old) return old;
             return {
               ...old,
-              suggestions: old.suggestions.map((s: any) => 
+              suggestions: old.suggestions.map((s: any) =>
                 s.id === suggestionId ? { ...s, status } : s
               )
             };
           });
-          
+
           toast({
             title: status === "accepted" ? "Action accepted" : "Action rejected",
-            description: status === "accepted" ? "Added to your to-do list." : "We won't suggest this again."
+            description: status === "accepted" ? "Saved to your calibration memory." : "Your feedback will tune future plans."
           });
         },
         onError: () => {
@@ -85,7 +85,7 @@ export default function AnalysisDetail({ id }: { id: string }) {
 
   const metrics = analysis.metrics;
   const isGoodEngagement = metrics.engagementRate >= 3.0;
-  
+
   return (
     <AppLayout>
       <div className="max-w-5xl mx-auto space-y-8 pb-12">
@@ -97,20 +97,20 @@ export default function AnalysisDetail({ id }: { id: string }) {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <Badge variant="outline" className="text-xs uppercase tracking-wider font-semibold">
-                {analysis.source === 'screenshot' ? 'Screenshot Analysis' : 'Manual Entry'}
+                {analysis.source === "screenshot" ? "Screenshot Confirmed" : "Manual Confirmed"}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                {new Date(analysis.createdAt).toLocaleDateString(undefined, { 
-                  month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' 
+                {new Date(analysis.createdAt).toLocaleDateString(undefined, {
+                  month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit"
                 })}
               </span>
             </div>
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">Post Breakdown</h1>
+            <h1 className="text-4xl font-bold tracking-tight text-foreground">Completed Action Plan</h1>
             {metrics.postTopic && (
               <p className="text-xl text-muted-foreground mt-2 font-medium">"{metrics.postTopic}"</p>
             )}
           </div>
-          
+
           <div className="flex gap-4">
             <div className="bg-card border border-border rounded-xl p-4 flex flex-col items-center justify-center shadow-sm min-w-32">
               <span className="text-sm font-medium text-muted-foreground mb-1">Engagement</span>
@@ -132,101 +132,90 @@ export default function AnalysisDetail({ id }: { id: string }) {
 
         <div className="grid md:grid-cols-3 gap-8">
           <div className="md:col-span-2 space-y-8">
-            {/* The Take */}
             <section>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
                   <Sparkles className="w-4 h-4" />
                 </div>
-                <h2 className="text-2xl font-bold text-foreground">The Brutally Honest Take</h2>
+                <h2 className="text-2xl font-bold text-foreground">Insight</h2>
               </div>
               <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 shadow-sm">
                 <p className="text-lg leading-relaxed text-foreground font-medium">
-                  {analysis.brutallyHonestTake}
+                  {analysis.summary}
                 </p>
-                <div className="mt-6 pt-6 border-t border-primary/10">
-                  <p className="text-muted-foreground leading-relaxed">
-                    {analysis.summary}
-                  </p>
-                </div>
               </div>
             </section>
 
-            {/* Why it Happened */}
             <section>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground">
                   <Target className="w-4 h-4" />
                 </div>
-                <h2 className="text-2xl font-bold text-foreground">Why It Happened</h2>
+                <h2 className="text-2xl font-bold text-foreground">Benchmark Comparison</h2>
               </div>
-              <div className="grid gap-3">
-                {analysis.whyItHappened.map((reason, i) => (
-                  <div key={i} className="bg-card border border-border rounded-xl p-4 flex items-start gap-3 shadow-sm hover-elevate">
-                    <div className="mt-0.5 min-w-6 text-muted-foreground font-mono text-sm">{i + 1}.</div>
-                    <p className="text-foreground">{reason}</p>
-                  </div>
-                ))}
-              </div>
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-foreground leading-relaxed">{analysis.brutallyHonestTake}</p>
+                </CardContent>
+              </Card>
             </section>
 
-            {/* Next Actions */}
             <section>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
                     <TrendingUp className="w-4 h-4" />
                   </div>
-                  <h2 className="text-2xl font-bold text-foreground">Your Playbook</h2>
+                  <h2 className="text-2xl font-bold text-foreground">Exactly 3 Action Items</h2>
                 </div>
               </div>
               <div className="space-y-4">
-                {analysis.suggestions.map((suggestion) => (
-                  <Card key={suggestion.id} className={`overflow-hidden transition-all duration-300 ${suggestion.status === 'accepted' ? 'border-green-500/50 bg-green-50/50 dark:bg-green-950/20' : suggestion.status === 'rejected' ? 'opacity-50 grayscale border-border/50' : 'border-primary/20 shadow-md'}`}>
+                {analysis.suggestions.map((suggestion, index) => (
+                  <Card key={suggestion.id} className={`overflow-hidden transition-all duration-300 ${suggestion.status === "accepted" ? "border-green-500/50 bg-green-50/50 dark:bg-green-950/20" : suggestion.status === "rejected" ? "opacity-50 grayscale border-border/50" : "border-primary/20 shadow-md"}`}>
                     <CardHeader className="pb-3 bg-muted/20 border-b border-border/50">
                       <div className="flex items-start justify-between">
                         <div>
+                          <Badge variant="secondary" className="mb-3">Action {index + 1}</Badge>
                           <CardTitle className="text-xl mb-1">{suggestion.title}</CardTitle>
-                          <CardDescription className="text-sm font-medium">{suggestion.rationale}</CardDescription>
                         </div>
-                        {suggestion.status !== 'pending' && (
-                          <Badge variant="outline" className={suggestion.status === 'accepted' ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted text-muted-foreground'}>
+                        {suggestion.status !== "pending" && (
+                          <Badge variant="outline" className={suggestion.status === "accepted" ? "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400" : "bg-muted text-muted-foreground"}>
                             {suggestion.status}
                           </Badge>
                         )}
                       </div>
                     </CardHeader>
-                    <CardContent className="pt-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex-1 bg-background rounded-lg p-3 border border-border">
-                          <span className="text-xs uppercase font-bold text-muted-foreground block mb-1 tracking-wider">The Action</span>
-                          <span className="font-medium text-foreground">{suggestion.action}</span>
-                        </div>
-                        
-                        {suggestion.status === 'pending' && (
-                          <div className="flex gap-2 shrink-0">
-                            <Button 
-                              variant="outline" 
-                              className="w-12 h-12 p-0 rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/30"
-                              onClick={() => handleFeedback(suggestion.id, "rejected")}
-                              disabled={submitFeedback.isPending}
-                            >
-                              <X className="w-5 h-5" />
-                            </Button>
-                            <Button 
-                              className="w-12 h-12 p-0 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-sm"
-                              onClick={() => handleFeedback(suggestion.id, "accepted")}
-                              disabled={submitFeedback.isPending}
-                            >
-                              {submitFeedback.isPending && submitFeedback.variables?.data?.suggestionId === suggestion.id ? (
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                              ) : (
-                                <Check className="w-5 h-5" />
-                              )}
-                            </Button>
-                          </div>
-                        )}
+                    <CardContent className="pt-4 space-y-4">
+                      <div className="grid gap-3">
+                        <ActionField label="WHY it matters" value={suggestion.rationale} />
+                        <ActionField label="HOW to do it" value={suggestion.action} />
+                        <ActionField label="WHEN to do it" value={suggestion.actionWhen} icon={<Clock className="w-4 h-4" />} />
                       </div>
+
+                      {suggestion.status === "pending" && (
+                        <div className="flex gap-2 justify-end border-t border-border pt-4">
+                          <Button
+                            variant="outline"
+                            className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/30"
+                            onClick={() => handleFeedback(suggestion.id, "rejected")}
+                            disabled={submitFeedback.isPending}
+                          >
+                            <X className="w-4 h-4 mr-2" /> Reject
+                          </Button>
+                          <Button
+                            className="bg-green-500 hover:bg-green-600 text-white shadow-sm"
+                            onClick={() => handleFeedback(suggestion.id, "accepted")}
+                            disabled={submitFeedback.isPending}
+                          >
+                            {submitFeedback.isPending && submitFeedback.variables?.data?.suggestionId === suggestion.id ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <Check className="w-4 h-4 mr-2" />
+                            )}
+                            Accept
+                          </Button>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -235,88 +224,43 @@ export default function AnalysisDetail({ id }: { id: string }) {
           </div>
 
           <div className="space-y-6">
-            {/* Detailed Stats */}
             <Card className="bg-card">
               <CardHeader className="pb-3 border-b border-border/50">
-                <CardTitle className="text-lg">Detailed Metrics</CardTitle>
+                <CardTitle className="text-lg">Confirmed Metrics</CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
                 <dl className="space-y-3">
-                  <div className="flex justify-between items-center py-1 border-b border-border/40">
-                    <dt className="text-muted-foreground">Format</dt>
-                    <dd className="font-semibold capitalize">{metrics.contentFormat.replace('_', ' ')}</dd>
-                  </div>
-                  <div className="flex justify-between items-center py-1 border-b border-border/40">
-                    <dt className="text-muted-foreground">Follower Change</dt>
-                    <dd className={`font-semibold ${metrics.followerChange > 0 ? 'text-green-500' : metrics.followerChange < 0 ? 'text-red-500' : ''}`}>
-                      {metrics.followerChange > 0 ? '+' : ''}{metrics.followerChange}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between items-center py-1 border-b border-border/40">
-                    <dt className="text-muted-foreground">Saves</dt>
-                    <dd className="font-semibold">{metrics.saves.toLocaleString()}</dd>
-                  </div>
-                  <div className="flex justify-between items-center py-1 border-b border-border/40">
-                    <dt className="text-muted-foreground">Shares</dt>
-                    <dd className="font-semibold">{metrics.shares.toLocaleString()}</dd>
-                  </div>
-                  <div className="flex justify-between items-center py-1 border-b border-border/40">
-                    <dt className="text-muted-foreground">Profile Visits</dt>
-                    <dd className="font-semibold">{metrics.profileVisits.toLocaleString()}</dd>
-                  </div>
-                  <div className="flex justify-between items-center py-1">
-                    <dt className="text-muted-foreground">Link Clicks</dt>
-                    <dd className="font-semibold">{metrics.linkClicks.toLocaleString()}</dd>
-                  </div>
+                  <MetricRow label="Format" value={metrics.contentFormat.replace("_", " ")} />
+                  <MetricRow label="Impressions" value={metrics.impressions.toLocaleString()} />
+                  <MetricRow label="Follower Change" value={`${metrics.followerChange > 0 ? "+" : ""}${metrics.followerChange}`} />
+                  <MetricRow label="Saves" value={metrics.saves.toLocaleString()} />
+                  <MetricRow label="Shares" value={metrics.shares.toLocaleString()} />
+                  <MetricRow label="Profile Visits" value={metrics.profileVisits.toLocaleString()} />
+                  <MetricRow label="Link Clicks" value={metrics.linkClicks.toLocaleString()} />
                 </dl>
               </CardContent>
             </Card>
-
-            {/* Content Plan Ideas */}
-            {analysis.nextContentPlan && analysis.nextContentPlan.length > 0 && (
-              <Card className="bg-card border-secondary border-2">
-                <CardHeader className="pb-3 border-b border-border/50 bg-secondary/10">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-secondary-foreground" />
-                    Content Ideas
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <ul className="space-y-3">
-                    {analysis.nextContentPlan.map((plan, i) => (
-                      <li key={i} className="flex gap-2 items-start text-sm">
-                        <div className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-primary" />
-                        <span className="text-foreground leading-tight">{plan}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Questions */}
-            {analysis.clarifyingQuestions && analysis.clarifyingQuestions.length > 0 && (
-              <Card className="bg-muted/30 border-dashed border-border">
-                <CardHeader className="pb-3 border-b border-border/50">
-                  <CardTitle className="text-lg flex items-center gap-2 text-muted-foreground">
-                    <HelpCircle className="w-4 h-4" />
-                    Think about this...
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <ul className="space-y-4">
-                    {analysis.clarifyingQuestions.map((q, i) => (
-                      <li key={i} className="text-sm text-muted-foreground font-medium italic">
-                        "{q}"
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
           </div>
         </div>
       </div>
     </AppLayout>
+  );
+}
+
+function ActionField({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  return (
+    <div className="bg-background rounded-lg p-3 border border-border">
+      <span className="text-xs uppercase font-bold text-muted-foreground flex items-center gap-1 mb-1 tracking-wider">{icon}{label}</span>
+      <span className="font-medium text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function MetricRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between items-center py-1 border-b border-border/40 last:border-0">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-semibold capitalize">{value}</dd>
+    </div>
   );
 }

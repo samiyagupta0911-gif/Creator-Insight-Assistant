@@ -83,7 +83,7 @@ paths:
     post:
       operationId: createAnalysis
       tags: [creatorIQ]
-      summary: Create an analytics insight translation
+      summary: Create a confirmed analytics insight translation
       requestBody:
         required: true
         content:
@@ -92,11 +92,23 @@ paths:
               $ref: "#/components/schemas/CreateAnalysisRequest"
       responses:
         "200":
-          description: Created analysis
+          description: Created or cached analysis
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Analysis"
+        "409":
+          description: Metric review confirmation is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineGateResponse"
+        "422":
+          description: Missing metrics require clarification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineGateResponse"
   /creatoriq/analyses/{id}:
     get:
       operationId: getAnalysis
@@ -153,24 +165,24 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/CreatorMatch"
-  /creatoriq/screenshot-insights:
+  /creatoriq/screenshot-metrics:
     post:
-      operationId: createScreenshotInsights
+      operationId: extractScreenshotMetrics
       tags: [creatorIQ]
-      summary: Extract insight from an Instagram analytics screenshot
+      summary: Extract metrics from an Instagram analytics screenshot for user review
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateScreenshotInsightsRequest"
+              $ref: "#/components/schemas/ExtractScreenshotMetricsRequest"
       responses:
         "200":
-          description: Screenshot-derived metrics and analysis
+          description: Extracted metrics review payload
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Analysis"
+                $ref: "#/components/schemas/MetricReviewResponse"
 components:
   schemas:
     HealthStatus:
@@ -311,6 +323,29 @@ components:
         postTopic:
           type: string
       required: [reach, impressions, engagementRate, followerChange, saves, shares, profileVisits, linkClicks, contentFormat, postTopic]
+    PartialMetricsInput:
+      type: object
+      properties:
+        reach:
+          type: integer
+        impressions:
+          type: integer
+        engagementRate:
+          type: number
+        followerChange:
+          type: integer
+        saves:
+          type: integer
+        shares:
+          type: integer
+        profileVisits:
+          type: integer
+        linkClicks:
+          type: integer
+        contentFormat:
+          type: string
+        postTopic:
+          type: string
     CreateAnalysisRequest:
       type: object
       properties:
@@ -318,8 +353,13 @@ components:
           $ref: "#/components/schemas/MetricsInput"
         context:
           type: string
+        source:
+          type: string
+          enum: [manual, screenshot]
+        confirmed:
+          type: boolean
       required: [metrics]
-    CreateScreenshotInsightsRequest:
+    ExtractScreenshotMetricsRequest:
       type: object
       properties:
         imageDataUrl:
@@ -327,6 +367,39 @@ components:
         notes:
           type: string
       required: [imageDataUrl]
+    MetricReviewResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ready_for_review, clarification_required]
+        metrics:
+          $ref: "#/components/schemas/PartialMetricsInput"
+        missingFields:
+          type: array
+          items:
+            type: string
+        questions:
+          type: array
+          items:
+            type: string
+      required: [status, metrics, missingFields, questions]
+    PipelineGateResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        stage:
+          type: string
+        missingFields:
+          type: array
+          items:
+            type: string
+        questions:
+          type: array
+          items:
+            type: string
+      required: [error, stage]
     Analysis:
       type: object
       properties:
@@ -356,6 +429,8 @@ components:
             type: string
         suggestions:
           type: array
+          minItems: 3
+          maxItems: 3
           items:
             $ref: "#/components/schemas/Suggestion"
         createdAt:
@@ -374,10 +449,12 @@ components:
           type: string
         action:
           type: string
+        actionWhen:
+          type: string
         status:
           type: string
           enum: [pending, accepted, rejected]
-      required: [id, analysisId, title, rationale, action, status]
+      required: [id, analysisId, title, rationale, action, actionWhen, status]
     SubmitFeedbackRequest:
       type: object
       properties:

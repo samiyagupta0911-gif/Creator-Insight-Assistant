@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface CreateScreenshotInsightsRequest {
+export interface ExtractScreenshotMetricsRequest {
   imageDataUrl: string;
   notes?: string;
 }

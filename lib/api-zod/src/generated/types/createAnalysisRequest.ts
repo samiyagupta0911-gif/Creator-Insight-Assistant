@@ -5,9 +5,12 @@
  * CreatorIQ API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateAnalysisRequestSource } from "./createAnalysisRequestSource";
 import type { MetricsInput } from "./metricsInput";
 
 export interface CreateAnalysisRequest {
   metrics: MetricsInput;
   context?: string;
+  source?: CreateAnalysisRequestSource;
+  confirmed?: boolean;
 }

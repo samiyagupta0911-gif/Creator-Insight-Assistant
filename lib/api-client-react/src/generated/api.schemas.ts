@@ -74,14 +74,59 @@ export interface MetricsInput {
   postTopic: string;
 }
 
+export interface PartialMetricsInput {
+  reach?: number;
+  impressions?: number;
+  engagementRate?: number;
+  followerChange?: number;
+  saves?: number;
+  shares?: number;
+  profileVisits?: number;
+  linkClicks?: number;
+  contentFormat?: string;
+  postTopic?: string;
+}
+
+export type CreateAnalysisRequestSource =
+  (typeof CreateAnalysisRequestSource)[keyof typeof CreateAnalysisRequestSource];
+
+export const CreateAnalysisRequestSource = {
+  manual: "manual",
+  screenshot: "screenshot",
+} as const;
+
 export interface CreateAnalysisRequest {
   metrics: MetricsInput;
   context?: string;
+  source?: CreateAnalysisRequestSource;
+  confirmed?: boolean;
 }
 
-export interface CreateScreenshotInsightsRequest {
+export interface ExtractScreenshotMetricsRequest {
   imageDataUrl: string;
   notes?: string;
+}
+
+export type MetricReviewResponseStatus =
+  (typeof MetricReviewResponseStatus)[keyof typeof MetricReviewResponseStatus];
+
+export const MetricReviewResponseStatus = {
+  ready_for_review: "ready_for_review",
+  clarification_required: "clarification_required",
+} as const;
+
+export interface MetricReviewResponse {
+  status: MetricReviewResponseStatus;
+  metrics: PartialMetricsInput;
+  missingFields: string[];
+  questions: string[];
+}
+
+export interface PipelineGateResponse {
+  error: string;
+  stage: string;
+  missingFields?: string[];
+  questions?: string[];
 }
 
 export type SuggestionStatus =
@@ -99,6 +144,7 @@ export interface Suggestion {
   title: string;
   rationale: string;
   action: string;
+  actionWhen: string;
   status: SuggestionStatus;
 }
 
@@ -112,6 +158,10 @@ export interface Analysis {
   whyItHappened: string[];
   clarifyingQuestions: string[];
   nextContentPlan: string[];
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
   suggestions: Suggestion[];
   createdAt: string;
 }
