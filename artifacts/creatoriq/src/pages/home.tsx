@@ -1,11 +1,8 @@
 import { Button } from "@/components/ui/button";
-import { SignInButton, SignUpButton, useAuth } from "@clerk/clerk-react";
 import { Link } from "wouter";
 import { ArrowRight, BarChart2, TrendingUp, Zap } from "lucide-react";
 
 export default function Home() {
-  const { isSignedIn } = useAuth();
-
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
       <header className="container mx-auto px-4 h-20 flex items-center justify-between border-b border-border/40">
@@ -16,20 +13,9 @@ export default function Home() {
           <span className="font-bold text-xl tracking-tight text-foreground">CreatorIQ</span>
         </div>
         <div className="flex items-center gap-4">
-          {isSignedIn ? (
-            <Link href="/app" className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
-              Go to Dashboard
-            </Link>
-          ) : (
-            <>
-              <SignInButton mode="modal">
-                <Button variant="ghost" className="font-medium text-foreground">Sign In</Button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <Button className="font-medium">Get Started</Button>
-              </SignUpButton>
-            </>
-          )}
+          <Link href="/app" className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
+            Go to Dashboard
+          </Link>
         </div>
       </header>
 
@@ -45,17 +31,9 @@ export default function Home() {
             CreatorIQ translates your overwhelming Instagram analytics into brutal honesty, clear answers, and concrete next steps.
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-4">
-            {isSignedIn ? (
-              <Link href="/app" className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-8 text-lg">
-                Enter Dashboard <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            ) : (
-              <SignUpButton mode="modal">
-                <Button size="lg" className="h-12 px-8 text-lg w-full sm:w-auto">
-                  Start Your Growth <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </SignUpButton>
-            )}
+            <Link href="/app" className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-8 text-lg">
+              Start Your Growth <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
           </div>
         </section>
 
