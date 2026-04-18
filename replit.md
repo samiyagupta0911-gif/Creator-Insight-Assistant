@@ -24,4 +24,15 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
+## CreatorIQ
+
+CreatorIQ is a full-stack AI analytics translator for Instagram creators.
+
+- **Frontend artifact**: `artifacts/creatoriq`, served at `/`
+- **Backend artifact**: `artifacts/api-server`, served at `/api`
+- **Database tables**: `creator_profiles`, `creator_analyses`, `creator_suggestions`, plus AI conversation tables from the Anthropic integration template
+- **Auth**: Clerk-based sign-in/sign-up with branded pages and user-scoped data, with a demo fallback for unsigned API calls
+- **AI**: Anthropic integration used for insight translation and screenshot metric extraction, with deterministic fallback recommendations if AI calls fail
+- **Core flows**: public landing page, onboarding personality builder, dashboard, manual analytics analysis, screenshot upload analysis, creator matching, and accept/reject feedback loop
+
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

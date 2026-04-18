@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: CreatorIQ API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: creatorIQ
+    description: CreatorIQ operations
 paths:
   /healthz:
     get:
@@ -24,6 +25,152 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /creatoriq/profile:
+    get:
+      operationId: getCreatorProfile
+      tags: [creatorIQ]
+      summary: Get active creator profile
+      responses:
+        "200":
+          description: Creator profile or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatorProfileResponse"
+    post:
+      operationId: upsertCreatorProfile
+      tags: [creatorIQ]
+      summary: Create or update creator profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertCreatorProfileRequest"
+      responses:
+        "200":
+          description: Saved creator profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatorProfile"
+  /creatoriq/dashboard:
+    get:
+      operationId: getCreatorDashboard
+      tags: [creatorIQ]
+      summary: Get dashboard summary
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardResponse"
+  /creatoriq/analyses:
+    get:
+      operationId: listAnalyses
+      tags: [creatorIQ]
+      summary: List analytics analyses
+      responses:
+        "200":
+          description: Analysis list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Analysis"
+    post:
+      operationId: createAnalysis
+      tags: [creatorIQ]
+      summary: Create an analytics insight translation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnalysisRequest"
+      responses:
+        "200":
+          description: Created analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
+  /creatoriq/analyses/{id}:
+    get:
+      operationId: getAnalysis
+      tags: [creatorIQ]
+      summary: Get analysis by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
+  /creatoriq/analyses/{id}/feedback:
+    post:
+      operationId: submitSuggestionFeedback
+      tags: [creatorIQ]
+      summary: Accept or reject a suggestion
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitFeedbackRequest"
+      responses:
+        "200":
+          description: Updated suggestion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Suggestion"
+  /creatoriq/matches:
+    get:
+      operationId: listCreatorMatches
+      tags: [creatorIQ]
+      summary: Get niche creator matches
+      responses:
+        "200":
+          description: Creator matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CreatorMatch"
+  /creatoriq/screenshot-insights:
+    post:
+      operationId: createScreenshotInsights
+      tags: [creatorIQ]
+      summary: Extract insight from an Instagram analytics screenshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScreenshotInsightsRequest"
+      responses:
+        "200":
+          description: Screenshot-derived metrics and analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analysis"
 components:
   schemas:
     HealthStatus:
@@ -31,6 +178,254 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
-
+      required: [status]
+    CreatorProfileResponse:
+      type: object
+      properties:
+        profile:
+          anyOf:
+            - $ref: "#/components/schemas/CreatorProfile"
+            - type: "null"
+      required: [profile]
+    CreatorProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        age:
+          type: integer
+        primaryCategory:
+          type: string
+        accountType:
+          type: string
+        followerCount:
+          type: integer
+        followerTier:
+          type: string
+        contentFormats:
+          type: array
+          items:
+            type: string
+        postFrequencyPerWeek:
+          type: integer
+        targetAudience:
+          type: string
+        aspiration:
+          type: string
+        biggestChallenge:
+          type: string
+        baselineEngagementRate:
+          type: number
+        baselineReach:
+          type: integer
+        contentTone:
+          type: string
+        inspiredBy:
+          type: array
+          items:
+            type: string
+        pastTacticsTried:
+          type: array
+          items:
+            type: string
+        postingTimeHabit:
+          type: string
+        creatingSince:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, displayName, age, primaryCategory, accountType, followerCount, followerTier, contentFormats, postFrequencyPerWeek, targetAudience, aspiration, biggestChallenge, baselineEngagementRate, baselineReach, contentTone, inspiredBy, pastTacticsTried, postingTimeHabit, creatingSince, createdAt, updatedAt]
+    UpsertCreatorProfileRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+        age:
+          type: integer
+          minimum: 13
+        primaryCategory:
+          type: string
+        accountType:
+          type: string
+        followerCount:
+          type: integer
+          minimum: 0
+        contentFormats:
+          type: array
+          items:
+            type: string
+        postFrequencyPerWeek:
+          type: integer
+          minimum: 0
+        targetAudience:
+          type: string
+        aspiration:
+          type: string
+        biggestChallenge:
+          type: string
+        baselineEngagementRate:
+          type: number
+        baselineReach:
+          type: integer
+          minimum: 0
+        contentTone:
+          type: string
+        inspiredBy:
+          type: array
+          items:
+            type: string
+        pastTacticsTried:
+          type: array
+          items:
+            type: string
+        postingTimeHabit:
+          type: string
+        creatingSince:
+          type: string
+      required: [displayName, age, primaryCategory, accountType, followerCount, contentFormats, postFrequencyPerWeek, targetAudience, aspiration, biggestChallenge, baselineEngagementRate, baselineReach, contentTone, inspiredBy, pastTacticsTried, postingTimeHabit, creatingSince]
+    MetricsInput:
+      type: object
+      properties:
+        reach:
+          type: integer
+        impressions:
+          type: integer
+        engagementRate:
+          type: number
+        followerChange:
+          type: integer
+        saves:
+          type: integer
+        shares:
+          type: integer
+        profileVisits:
+          type: integer
+        linkClicks:
+          type: integer
+        contentFormat:
+          type: string
+        postTopic:
+          type: string
+      required: [reach, impressions, engagementRate, followerChange, saves, shares, profileVisits, linkClicks, contentFormat, postTopic]
+    CreateAnalysisRequest:
+      type: object
+      properties:
+        metrics:
+          $ref: "#/components/schemas/MetricsInput"
+        context:
+          type: string
+      required: [metrics]
+    CreateScreenshotInsightsRequest:
+      type: object
+      properties:
+        imageDataUrl:
+          type: string
+        notes:
+          type: string
+      required: [imageDataUrl]
+    Analysis:
+      type: object
+      properties:
+        id:
+          type: string
+        profileId:
+          type: string
+        source:
+          type: string
+        metrics:
+          $ref: "#/components/schemas/MetricsInput"
+        summary:
+          type: string
+        brutallyHonestTake:
+          type: string
+        whyItHappened:
+          type: array
+          items:
+            type: string
+        clarifyingQuestions:
+          type: array
+          items:
+            type: string
+        nextContentPlan:
+          type: array
+          items:
+            type: string
+        suggestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Suggestion"
+        createdAt:
+          type: string
+      required: [id, profileId, source, metrics, summary, brutallyHonestTake, whyItHappened, clarifyingQuestions, nextContentPlan, suggestions, createdAt]
+    Suggestion:
+      type: object
+      properties:
+        id:
+          type: string
+        analysisId:
+          type: string
+        title:
+          type: string
+        rationale:
+          type: string
+        action:
+          type: string
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+      required: [id, analysisId, title, rationale, action, status]
+    SubmitFeedbackRequest:
+      type: object
+      properties:
+        suggestionId:
+          type: string
+        status:
+          type: string
+          enum: [accepted, rejected]
+        reason:
+          type: string
+      required: [suggestionId, status]
+    CreatorMatch:
+      type: object
+      properties:
+        id:
+          type: string
+        handle:
+          type: string
+        category:
+          type: string
+        followerTier:
+          type: string
+        whyMatch:
+          type: string
+        growthSignal:
+          type: string
+        tacticToStudy:
+          type: string
+      required: [id, handle, category, followerTier, whyMatch, growthSignal, tacticToStudy]
+    DashboardResponse:
+      type: object
+      properties:
+        profileComplete:
+          type: boolean
+        analysesCount:
+          type: integer
+        acceptedSuggestions:
+          type: integer
+        rejectedSuggestions:
+          type: integer
+        averageEngagementRate:
+          type: number
+        latestAnalysis:
+          anyOf:
+            - $ref: "#/components/schemas/Analysis"
+            - type: "null"
+        calibrationNotes:
+          type: array
+          items:
+            type: string
+      required: [profileComplete, analysesCount, acceptedSuggestions, rejectedSuggestions, averageEngagementRate, latestAnalysis, calibrationNotes]

@@ -100,6 +100,9 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
+      "@anthropic-ai/sdk",
+      "p-limit",
+      "p-retry",
     ],
     sourcemap: "linked",
     plugins: [

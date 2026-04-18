@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "CreatorIQ"
+version = "1.0.0"
+id = "artifacts/creatoriq"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21781
+
+[services.development]
+run = "pnpm --filter @workspace/creatoriq run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/creatoriq", "run", "build" ]
+publicDir = "artifacts/creatoriq/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21781"
+BASE_PATH = "/"
